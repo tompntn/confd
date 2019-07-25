@@ -40,7 +40,7 @@ ifeq ($(ARCH),x86_64)
 endif
 
 ###############################################################################
-GO_BUILD_VER?=v0.20
+GO_BUILD_VER?=v0.22
 
 CALICO_BUILD = calico/go-build:$(GO_BUILD_VER)
 
