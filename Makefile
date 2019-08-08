@@ -203,13 +203,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 .PHONY: ut
 ## Run the fast set of unit tests in a container.
 ut:
-	-mkdir -p .go-pkg-cache
-	docker run --rm -t --privileged --net=host \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-		-e GOCACHE=/go-cache \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r .'
+	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r .'
 
 ## Etcd is used by the kubernetes
 # NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:

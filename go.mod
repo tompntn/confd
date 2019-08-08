@@ -1,4 +1,4 @@
-module github.com/projectcalico/confd
+module github.com/kelseyhightower/confd
 
 go 1.12
 
@@ -30,7 +30,6 @@ require (
 	github.com/imdario/mergo v0.0.0-20141206190957-6633656539c1 // indirect
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/json-iterator/go v0.0.0-20180612202835-f2b4162afba3 // indirect
-	github.com/kelseyhightower/confd v0.16.0 // indirect
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d // indirect
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af // indirect
