@@ -96,15 +96,7 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-.PHONY: remote-deps
-remote-deps:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-	go list all; \
-	mkdir -p vendor/golang.org/x/crypto; \
-	cp -r `go list -m -f "{{.Dir}}" golang.org/x/crypto`/openpgp vendor/golang.org/x/crypto/openpgp; \
-	chmod -R +w vendor/golang.org/x/crypto'
-
-build: remote-deps bin/confd
+build: bin/confd
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -294,7 +286,7 @@ bin/typha:
 	  touch $@
 	-docker rm -f confd-typha
 
-foss-checks: remote-deps
+foss-checks:
 	@echo Running $@...
 	@docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
@@ -363,10 +355,6 @@ help:
 	@echo "For example, to build for arm64:"
 	@echo
 	@echo "  make build ARCH=arm64"
-	@echo
-	@echo "Initial set-up:"
-	@echo
-	@echo "  make remote-deps	Update/install remote dependencies."
 	@echo
 	@echo "Builds:"
 	@echo
