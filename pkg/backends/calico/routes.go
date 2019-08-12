@@ -36,6 +36,12 @@ const (
 	envAdvertiseClusterIPs = "CALICO_ADVERTISE_CLUSTER_IPS"
 )
 
+const (
+	// For now, put a limit on the number of External IP's to advertise per 
+	// service. For simplicity.
+	maxExternalIPs = 5
+)
+
 // routeGenerator defines the data fields
 // necessary for monitoring the services/endpoints resources for
 // valid service ips to advertise
@@ -194,25 +200,65 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 
 	// see if any endpoints are on this node and advertise if so
 	// else remove the route if it also already exists
-	rg.Lock()
-	if rg.advertiseThisService(svc, ep) {
-		route := svc.Spec.ClusterIP + "/32"
-		if cur, exists := rg.svcRouteMap[key]; !exists {
-			// This is a new route - send it through.
-			rg.advertiseRoute(key, route)
-		} else if route != cur {
-			// The route has changed somehow. Send a delete for the old one
-			// and add the new one. We don't expect to hit this, since cluster IPs
-			// are immutable. But, handle it for good measure.
-			logc.Warn("ClusterIP for service changed, adjusting")
-			rg.withdrawRoute(key, cur)
-			rg.advertiseRoute(key, route)
-		}
-	} else if cur, exists := rg.svcRouteMap[key]; exists {
-		// We were advertising this route, but should no longer do so.
-		rg.withdrawRoute(key, cur)
+	externalIPKeys := make([]string, 0)
+	for i := 0; i < maxExternalIPs; i++ {
+		externalIPKeys = append(externalIPKeys, getExternalIPKey(key, i))
 	}
+
+	rg.Lock()
+
+	if rg.advertiseThisService(svc, ep) {
+
+		// Advertise ClusterIP
+		if svc.ClusterIP != nil {
+			rg.advertiseRouteWithKey(svc.ClusterIP + "/32", key)
+		}
+
+		// Advertise External IP's
+		if svc.Spec.ExternalIPs != nil {
+			for i := 0; i < len(svc.Spec.ExternalIPs) && i < maxExternalIPs; i++ {
+				rg.advertiseRouteWithKey(svc.Spec.ExternalIPs[i] + "/32",
+				 externalIPKeys[i])
+			}
+		}
+
+	} else {
+
+		// Withdraw Cluster IP
+		rg.tryWithdrawRouteWithKey(key)
+
+		// Withdraw External IP's
+		for _, externalIPKey := range externalIPKeys {
+			rg.tryWithdrawRouteWithKey(externalIPKey)
+		}
+
+	}
+
 	rg.Unlock()
+}
+
+// getExternalIPKey generates the key for the ExternalIP at the given index.
+func getExternalIPKey(baseKey string, num int) string {
+
+	return fmt.Sprintf("%s_external%d", baseKey, num)
+
+}
+
+// advertiseRouteWithKey associates the given route with the given key,
+// and advertises this route. If the key was previously associated with a
+// different route, update the association.
+func (rg *routeGenerator) advertiseRouteWithKey(route, key string) {
+
+	if cur, exists := rg.svcRouteMap[key]; !exists {
+		// This is a new route - send it through.
+		rg.advertiseRoute(key, route)
+	} else if route != cur {
+		// The route has changed. Send a delete for the old one and add the new one.
+		logc.Warn("Route for service changed, adjusting")
+		rg.withdrawRoute(key, cur)
+		rg.advertiseRoute(key, route)
+	}
+
 }
 
 // advertiseThisService returns true if this service should be advertised on this node,
@@ -270,12 +316,32 @@ func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
 	if route, exists := rg.svcRouteMap[key]; exists {
 		rg.withdrawRoute(key, route)
 	}
+
+	// Withdraw Cluster IP
+	rg.tryWithdrawRouteWithKey(key)
+
+	// Withdraw External IPs
+	for i := 0; i < maxExternalIPs; i++ {
+		rg.tryWithdrawRouteWithKey(getExternalIPKey(key, i))
+	}
+
 }
 
 // advertiseRoute advertises a route and caches it.
 func (rg *routeGenerator) advertiseRoute(key, route string) {
 	rg.svcRouteMap[key] = route
 	rg.client.AddStaticRoutes([]string{route})
+}
+
+// tryWithdrawRouteWithKey withdraws the route associated with the given key
+// if the route is being advertised.
+func (rg *routeGenerator) tryWithdrawRouteWithKey(key string) {
+
+	if cur, exists := rg.svcRouteMap[key]; exists {
+		// We were advertising this route, but should no longer do so.
+		rg.withdrawRoute(key, cur)
+	}
+
 }
 
 // withdrawRoute withdraws a route and removes it from the cache.
